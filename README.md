@@ -243,6 +243,13 @@ Control a specific streamdeck:
 deckmaster -device [serial number]
 ```
 
+Wait for the device to be connected instead of exiting when it isn't (the Nix
+modules' services always do):
+
+```bash
+deckmaster -wait
+```
+
 Set a sleep timeout after which the screen gets turned off:
 
 ```bash

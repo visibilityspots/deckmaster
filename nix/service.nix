@@ -141,6 +141,9 @@ let
             (toString i.brightness)
             "-keyboard"
             i.keyboard
+            # A deck that isn't plugged in at login would otherwise fail
+            # and restart every RestartSec until it is.
+            "-wait"
           ]
           ++ lib.optionals (i.device != null) [
             "-device"

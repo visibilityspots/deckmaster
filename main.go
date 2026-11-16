@@ -39,6 +39,7 @@ var (
 	device          = flag.String("device", "", "which device to use (serial number)")
 	brightness      = flag.Uint("brightness", 80, "brightness in percent")
 	sleep           = flag.String("sleep", "", "sleep timeout")
+	wait            = flag.Bool("wait", false, "wait for the device to be connected instead of exiting")
 	verbose         = flag.Bool("verbose", false, "verbose output")
 	version         = flag.Bool("version", false, "display version")
 	keyboardBackend = flag.String("keyboard", "auto", "keyboard emulation backend: auto, wayland, x11, uinput or none")
@@ -326,32 +327,57 @@ func closeDevice(dev *streamdeck.Device) {
 	}
 }
 
-func initDevice() (*streamdeck.Device, error) {
+// errNoDevice means no connected device matches -device, or none is connected.
+var errNoDevice = errors.New("no Stream Deck devices found")
+
+// findDevice returns the connected device with the serial given by -device,
+// or the first one without it.
+func findDevice() (*streamdeck.Device, error) {
 	d, err := streamdeck.Devices()
 	if err != nil {
 		return nil, err
 	}
-	if len(d) == 0 {
-		return nil, fmt.Errorf("no Stream Deck devices found")
+	if len(*device) == 0 {
+		if len(d) == 0 {
+			return nil, errNoDevice
+		}
+		return &d[0], nil
 	}
 
-	dev := d[0]
-	if len(*device) > 0 {
-		found := false
-		for _, v := range d {
-			if v.Serial == *device {
-				dev = v
-				found = true
-				break
-			}
+	available := make([]string, 0, len(d))
+	for i := range d {
+		if d[i].Serial == *device {
+			return &d[i], nil
 		}
-		if !found {
-			fmt.Fprintln(os.Stderr, "Can't find device. Available devices:")
-			for _, v := range d {
-				fmt.Fprintf(os.Stderr, "Serial %s (%d buttons)\n", v.Serial, v.Keys)
-			}
-			os.Exit(1)
+		available = append(available, fmt.Sprintf("%s (%d buttons)", d[i].Serial, d[i].Keys))
+	}
+	if len(available) == 0 {
+		return nil, fmt.Errorf("can't find device %s: %w", *device, errNoDevice)
+	}
+	return nil, fmt.Errorf("can't find device %s: %w; available devices: %s",
+		*device, errNoDevice, strings.Join(available, ", "))
+}
+
+// waitForDevice polls until findDevice finds a device or fails for another
+// reason.
+func waitForDevice(err error) (*streamdeck.Device, error) {
+	fmt.Fprintf(os.Stderr, "%s, waiting for it to be connected...\n", err)
+	for {
+		time.Sleep(time.Second)
+		dev, err := findDevice()
+		if !errors.Is(err, errNoDevice) {
+			return dev, err
 		}
+	}
+}
+
+func initDevice() (*streamdeck.Device, error) {
+	dev, err := findDevice()
+	if *wait && errors.Is(err, errNoDevice) {
+		dev, err = waitForDevice(err)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if err := dev.Open(); err != nil {
@@ -359,7 +385,7 @@ func initDevice() (*streamdeck.Device, error) {
 	}
 	ver, err := dev.FirmwareVersion()
 	if err != nil {
-		return &dev, err
+		return dev, err
 	}
 	verbosef("Found device with serial %s (%d buttons, firmware %s)",
 		dev.Serial, dev.Keys, ver)
@@ -383,27 +409,27 @@ func initDevice() (*streamdeck.Device, error) {
 	}
 
 	if err := dev.Reset(); err != nil {
-		return &dev, err
+		return dev, err
 	}
 
 	if *brightness > 100 {
 		*brightness = 100
 	}
 	if err = dev.SetBrightness(uint8(*brightness)); err != nil { //nolint:gosec // clamped to 100 above
-		return &dev, err
+		return dev, err
 	}
 
 	dev.SetSleepFadeDuration(fadeDuration)
 	if len(*sleep) > 0 {
 		timeout, err := time.ParseDuration(*sleep)
 		if err != nil {
-			return &dev, err
+			return dev, err
 		}
 
 		dev.SetSleepTimeout(timeout)
 	}
 
-	return &dev, nil
+	return dev, nil
 }
 
 func run() error {
