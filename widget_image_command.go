@@ -80,8 +80,13 @@ func (w *ImageCommandWidget) loadImage(image string) {
 
 	changed := image != w.current
 	w.current, w.modTime = image, modTime
-	if err := w.LoadImage(image); err != nil && changed {
-		fmt.Fprintf(os.Stderr, "key %d: can't load image %s: %s\n", w.key, image, err)
+	if err := w.LoadImage(image); err != nil {
+		if changed {
+			fmt.Fprintf(os.Stderr, "key %d: can't load image %s: %s\n", w.key, image, err)
+		}
+		// retry on the next update, e.g. when the file was still being
+		// written; the error is only logged once
+		w.modTime = time.Time{}
 	}
 }
 

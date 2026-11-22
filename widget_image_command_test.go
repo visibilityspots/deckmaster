@@ -120,3 +120,38 @@ func TestFirstLine(t *testing.T) {
 		}
 	}
 }
+
+func TestImageCommandWidgetRetriesBrokenImage(t *testing.T) {
+	dir := t.TempDir()
+	img := filepath.Join(dir, "badge.png")
+	// half-written: not a PNG yet
+	if err := os.WriteFile(img, []byte("partial"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w, out := renderWidget(t, xlDevice(), displayKey, WidgetConfig{ID: "imageCommand", Config: map[string]interface{}{
+		"command": "echo " + img,
+	}})
+	iw := w.(*ImageCommandWidget)
+	waitForFresh(t, iw.command)
+	if err := w.Update(); err != nil {
+		t.Fatal(err)
+	}
+
+	// finished writing, with the same modification time as the broken file
+	fi, err := os.Stat(img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeSquare(t, img, color.RGBA{255, 0, 0, 255})
+	if err := os.Chtimes(img, fi.ModTime(), fi.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	w.Update()
+	waitForFresh(t, iw.command)
+	if err := w.Update(); err != nil {
+		t.Fatal(err)
+	}
+	if c := centerColor(out.image(t, "key 0")); c.R != 255 {
+		t.Errorf("shows %v, want the finished red image", c)
+	}
+}
