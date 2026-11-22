@@ -1,13 +1,19 @@
 # One deckmaster per Stream Deck. The instance name picks the settings file
 # ~/.config/deckmaster/<instance>.env, e.g. deckmaster@mini.service reads
-# ~/.config/deckmaster/mini.env:
+# ~/.config/deckmaster/mini.env, with lines like these (no comments after a
+# value: systemd would make them part of it):
 #
-#   SERIAL=AL12H1A00000   # deckmaster -device x lists the serials
+#   SERIAL=AL12H1A00000
 #   DECK=/home/you/.config/deckmaster/mini/main.deck
-#   LAYOUT=mini           # for -check while the device is unplugged
+#   LAYOUT=mini
 #
-# Enable one instance per device:
-#   systemctl --user enable --now deckmaster@mini deckmaster@plus
+# SERIAL is the device's serial number, which `deckmaster -device x` lists.
+# It's required: without it every instance would take the first device.
+# LAYOUT (mini, original, xl or plus) is used by -check before a reload
+# while the device is unplugged.
+#
+# Enable one instance per device, once its SERIAL is filled in:
+#   systemctl --user enable --now deckmaster@mini
 
 [Unit]
 Description=Deckmaster for Stream Deck %i
@@ -15,6 +21,7 @@ Documentation=https://github.com/visibilityspots/deckmaster
 
 [Service]
 EnvironmentFile=%E/deckmaster/%i.env
+ExecStartPre=/bin/sh -c 'test -n "$$SERIAL" || { echo "SERIAL is empty in %E/deckmaster/%i.env, see deckmaster -device x" >&2; exit 1; }'
 # -wait: start before the device is plugged in, survive unplugging it
 ExecStart=/usr/bin/deckmaster -wait -device ${SERIAL} -deck ${DECK}
 # refuse a reload of broken decks, so systemctl reports it
