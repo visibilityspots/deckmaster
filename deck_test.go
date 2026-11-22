@@ -309,3 +309,37 @@ func TestExecuteCommand(t *testing.T) {
 		executeCommand(cmd)
 	}
 }
+
+func TestNextDeckAction(t *testing.T) {
+	key := func(index uint8, a *ActionConfig) Widget {
+		return NewBaseWidget(plusDevice(), "", index, a, nil, nil)
+	}
+	tests := []struct {
+		name string
+		deck *Deck
+		want string
+	}{
+		{"first key with a deck action wins", &Deck{Widgets: []Widget{
+			key(0, &ActionConfig{Exec: "true"}),
+			key(1, &ActionConfig{Deck: "b.deck"}),
+			key(2, &ActionConfig{Deck: "c.deck"}),
+		}}, "b.deck"},
+		{"falls back to the left swipe", &Deck{
+			Widgets: []Widget{key(0, nil)},
+			Swipe:   SwipeConfig{Left: &ActionConfig{Deck: "next.deck"}, Right: &ActionConfig{Deck: "prev.deck"}},
+		}, "next.deck"},
+		{"swipe without a deck switch doesn't count", &Deck{
+			Swipe: SwipeConfig{Left: &ActionConfig{Keycode: "1"}},
+		}, ""},
+		{"no deck action at all", &Deck{Widgets: []Widget{key(0, &ActionConfig{Exec: "true"})}}, ""},
+	}
+	for _, tt := range tests {
+		got := ""
+		if a := tt.deck.nextDeckAction(); a != nil {
+			got = a.Deck
+		}
+		if got != tt.want {
+			t.Errorf("%s: nextDeckAction() = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}

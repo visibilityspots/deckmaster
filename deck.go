@@ -506,6 +506,33 @@ func (d *Deck) swipe(dev *streamdeck.Device, left bool) {
 	}
 }
 
+// nextDeckAction returns the action that leads to the next deck: the short
+// press action of the first key that switches decks, or else the left swipe
+// action if it switches decks. It returns nil if the deck has neither.
+func (d *Deck) nextDeckAction() *ActionConfig {
+	for _, w := range d.Widgets {
+		if a := w.Action(); a != nil && a.Deck != "" {
+			return a
+		}
+	}
+	if a := d.Swipe.Left; a != nil && a.Deck != "" {
+		return a
+	}
+	return nil
+}
+
+// next switches to the next deck, see nextDeckAction. Only the deck switch
+// of that action runs, not its other parts (e.g. an exec), so paging through
+// the decks from outside has no side effects.
+func (d *Deck) next(dev *streamdeck.Device) {
+	a := d.nextDeckAction()
+	if a == nil {
+		fmt.Fprintln(os.Stderr, "No key or swipe on", d.File, "switches to another deck")
+		return
+	}
+	d.runAction(dev, &ActionConfig{Deck: a.Deck})
+}
+
 // runAction runs an action.
 func (d *Deck) runAction(dev *streamdeck.Device, a *ActionConfig) {
 	if a.Deck != "" {

@@ -102,6 +102,11 @@ func eventLoop(dev *streamdeck.Device, tch chan interface{}) error {
 	hup := make(chan os.Signal, 1)
 	signal.Notify(hup, syscall.SIGHUP)
 
+	// SIGUSR1 switches to the next deck, so scripts and keybindings can page
+	// through the decks without touching the device.
+	usr1 := make(chan os.Signal, 1)
+	signal.Notify(usr1, syscall.SIGUSR1)
+
 	// long presses are detected on separate goroutines, but their actions run
 	// here, so only this goroutine writes to the device
 	holds := make(chan func(), 8)
@@ -180,6 +185,10 @@ func eventLoop(dev *streamdeck.Device, tch chan interface{}) error {
 			}
 			deck = nd
 			deck.updateWidgets()
+
+		case <-usr1:
+			verbosef("Received SIGUSR1, switching to the next deck...")
+			deck.next(dev)
 
 		case <-sigs:
 			fmt.Println("Shutting down...")
