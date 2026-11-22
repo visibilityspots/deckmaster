@@ -97,17 +97,31 @@ func expandHome(path string) (string, error) {
 	return filepath.Join(home, path[1:]), nil
 }
 
-func eventLoop(dev *streamdeck.Device, tch chan interface{}) error {
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	hup := make(chan os.Signal, 1)
-	signal.Notify(hup, syscall.SIGHUP)
-
+// Signal channels, set up by notifySignals before deckmaster waits for its
+// device: an unhandled SIGHUP (e.g. systemctl reload) would otherwise kill a
+// waiting deckmaster, and systemd doesn't restart a unit that died of it.
+var (
+	sigs chan os.Signal // SIGINT, SIGTERM: quit
+	hup  chan os.Signal // SIGHUP: reload the deck
 	// SIGUSR1 switches to the next deck, so scripts and keybindings can page
 	// through the decks without touching the device.
-	usr1 := make(chan os.Signal, 1)
+	usr1 chan os.Signal
+)
+
+// errShutdown is returned when deckmaster was asked to quit while waiting
+// for its device.
+var errShutdown = errors.New("shutting down")
+
+func notifySignals() {
+	sigs = make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	hup = make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	usr1 = make(chan os.Signal, 1)
 	signal.Notify(usr1, syscall.SIGUSR1)
+}
+
+func eventLoop(dev *streamdeck.Device, tch chan interface{}) error {
 
 	// long presses are detected on separate goroutines, but their actions run
 	// here, so only this goroutine writes to the device
@@ -374,7 +388,19 @@ func findDevice() (*streamdeck.Device, error) {
 func waitForDevice(err error) (*streamdeck.Device, error) {
 	fmt.Fprintf(os.Stderr, "%s, waiting for it to be connected...\n", err)
 	for {
-		time.Sleep(time.Second)
+		select {
+		case <-time.After(time.Second):
+		case <-sigs:
+			return nil, errShutdown
+		case <-hup:
+			// the deck gets loaded once the device is there
+			verbosef("Received SIGHUP while waiting for the device, nothing to reload yet")
+			continue
+		case <-usr1:
+			verbosef("Received SIGUSR1 while waiting for the device, ignoring it")
+			continue
+		}
+
 		dev, err := findDevice()
 		if !errors.Is(err, errNoDevice) {
 			return dev, err
@@ -448,10 +474,16 @@ func run() error {
 		return err
 	}
 
+	notifySignals()
+
 	// initialize device
 	dev, err := initDevice()
 	if dev != nil {
 		defer closeDevice(dev)
+	}
+	if errors.Is(err, errShutdown) {
+		fmt.Println("Shutting down...")
+		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("unable to initialize Stream Deck: %w", err)
