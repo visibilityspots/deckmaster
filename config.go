@@ -182,18 +182,35 @@ func LoadConfigFromFile(base, path string, files []string) (DeckConfig, error) {
 		return config, err
 	}
 
-	_, err = toml.Decode(string(file), &config)
+	md, err := toml.Decode(string(file), &config)
+	if err != nil {
+		return config, fmt.Errorf("%s: %w", filename, err)
+	}
+	if undecoded := md.Undecoded(); len(undecoded) > 0 {
+		keys := make([]string, len(undecoded))
+		for i, k := range undecoded {
+			keys[i] = k.String()
+		}
+		unknownKeys(filename, keys)
+	}
+
 	if config.Parent != "" {
 		parent, err := LoadConfigFromFile(base, config.Parent, append(files, filename))
 		if err != nil {
 			return parent, err
 		}
 
-		merged := MergeDeckConfig(&config, &parent)
-		return merged, err
+		return MergeDeckConfig(&config, &parent), nil
 	}
 
-	return config, err
+	return config, nil
+}
+
+// unknownKeys gets called with the keys of a deck file that deckmaster
+// doesn't know, usually typos that would otherwise be ignored silently. It
+// warns by default; deck checks (-check) count them as errors.
+var unknownKeys = func(filename string, keys []string) {
+	fmt.Fprintf(os.Stderr, "%s: unknown keys ignored: %s\n", filename, strings.Join(keys, ", "))
 }
 
 // LoadConfig loads config from filename.

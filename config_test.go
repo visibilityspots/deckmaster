@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -138,5 +139,46 @@ func TestSaveConfig(t *testing.T) {
 
 	if err := config.Save(filepath.Join(t.TempDir(), "missing", "saved.deck")); err == nil {
 		t.Error("expected an error saving to a missing directory")
+	}
+}
+
+func TestLoadConfigReportsErrorsWithParent(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("parent.deck", "[[keys]]\n  index = 0\n")
+	// a type error in a deck with a parent used to be swallowed by the
+	// parent's result
+	write("child.deck", "parent = \"parent.deck\"\n[[keys]]\n  index = \"zero\"\n")
+
+	if _, err := LoadConfig(filepath.Join(dir, "child.deck")); err == nil {
+		t.Error("LoadConfig() of a broken deck with a parent: no error")
+	}
+}
+
+func TestLoadConfigUnknownKeys(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "typo.deck")
+	content := "[[keys]]\n  index = 0\n  [keys.action_hld]\n    exec = \"true\"\n  [keys.widget]\n    id = \"button\"\n    [keys.widget.config]\n      anything = \"goes\"\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var got []string
+	old := unknownKeys
+	unknownKeys = func(_ string, keys []string) { got = append(got, keys...) }
+	t.Cleanup(func() { unknownKeys = old })
+
+	if _, err := LoadConfig(path); err != nil {
+		t.Fatal(err)
+	}
+	// widget config is free-form, so only the misspelled action counts
+	want := []string{"keys.action_hld", "keys.action_hld.exec"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("unknown keys = %v, want %v", got, want)
 	}
 }
