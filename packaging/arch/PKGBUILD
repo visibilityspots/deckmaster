@@ -31,12 +31,16 @@ pkgver() {
 prepare() {
   cd "${_pkgname}"
   export GOPATH="${srcdir}/gopath"
-  go mod download -x
+  export GOTOOLCHAIN=local
+  go mod download
+  # every module must match go.sum, which pins what was reviewed
+  go mod verify
 }
 
 build() {
   cd "${_pkgname}"
   export GOPATH="${srcdir}/gopath"
+  export GOTOOLCHAIN=local
   export CGO_CPPFLAGS="${CPPFLAGS}"
   export CGO_CFLAGS="${CFLAGS}"
   export CGO_CXXFLAGS="${CXXFLAGS}"
@@ -49,6 +53,7 @@ build() {
 check() {
   cd "${_pkgname}"
   export GOPATH="${srcdir}/gopath"
+  export GOTOOLCHAIN=local
   export GOFLAGS='-mod=readonly -modcacherw'
   go test ./...
 }
