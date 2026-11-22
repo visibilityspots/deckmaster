@@ -257,6 +257,14 @@ Set a sleep timeout after which the screen gets turned off:
 deckmaster -sleep 10m
 ```
 
+Switch to the next deck from outside, e.g. from a keybinding or script. The
+next deck is the one the first key with a `deck` action leads to, or else the
+one the left swipe leads to:
+
+```bash
+pkill -USR1 -x deckmaster
+```
+
 Choose how key presses get emulated (`auto`, `wayland`, `x11`, `uinput` or
 `none`, see [Emulate key-presses](#emulate-key-presses)):
 
