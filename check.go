@@ -52,9 +52,10 @@ var checkLayouts = map[string]streamdeck.Device{
 
 // checkDecks loads the given deck and every deck reachable from it through
 // deck actions, without touching the device, and reports all problems:
-// syntax and type errors, unknown keys, unknown widgets, missing files,
-// files others can change, and exec actions running such files. It returns
-// the number of problems found.
+// syntax and type errors, unknown keys, unknown widgets, keys and dials the
+// device doesn't have, icons that don't load, missing files, and deck files,
+// exec programs and widget commands others can change. It returns the number
+// of problems found.
 func checkDecks(dev *streamdeck.Device, start string, w io.Writer) int {
 	problems := 0
 	report := func(format string, a ...interface{}) {
@@ -94,6 +95,8 @@ func checkDecks(dev *streamdeck.Device, start string, w io.Writer) int {
 		if _, err := LoadDeck(dev, ".", path); err != nil {
 			report("%s", err)
 		}
+
+		checkLayout(dev, dc, filepath.Dir(path), report)
 
 		for _, a := range dc.actions() {
 			if a.Exec != "" {
@@ -153,4 +156,70 @@ func (l *actionList) add(aa ...*ActionConfig) {
 
 func (l *actionList) addDial(dc DialConfig) {
 	l.add(dc.Action, dc.ActionHold, dc.ActionLeft, dc.ActionRight, dc.ActionTouch, dc.ActionTouchHold)
+}
+
+// checkLayout reports keys and dials the device doesn't have, icons that
+// don't load, and widget commands that won't run.
+func checkLayout(dev *streamdeck.Device, dc DeckConfig, base string, report func(string, ...interface{})) {
+	for _, k := range dc.Keys {
+		where := fmt.Sprintf("key %d", k.Index)
+		if k.Index >= dev.Keys+dev.TouchKeys {
+			report("%s: the device has %d keys (0-%d)", where, dev.Keys+dev.TouchKeys, dev.Keys+dev.TouchKeys-1)
+		}
+		checkWidgetConfig(where, k.Widget, base, report)
+	}
+	for _, d := range dc.Dials {
+		where := fmt.Sprintf("dial %d", d.Index)
+		if d.Index >= dev.Dials {
+			report("%s: the device has %d dials", where, dev.Dials)
+		}
+		checkWidgetConfig(where, d.Widget, base, report)
+		if d.RingValue != "" {
+			checkWidgetCommand(where+" ring_value", d.RingValue, report)
+		}
+	}
+}
+
+// checkWidgetConfig reports a widget's icon that doesn't load and commands
+// that won't run.
+func checkWidgetConfig(where string, wc WidgetConfig, base string, report func(string, ...interface{})) {
+	var icon string
+	if err := ConfigValue(wc.Config["icon"], &icon); err == nil && icon != "" {
+		var path string
+		var err error
+		if isIconName(icon) {
+			path, err = findIcon(icon)
+		} else {
+			path, err = expandPath(base, icon)
+		}
+		if err == nil {
+			_, err = loadImage(path)
+		}
+		if err != nil {
+			report("%s: icon %s: %s", where, icon, err)
+		}
+	}
+
+	switch wc.ID {
+	case "command":
+		var commands []string
+		if err := ConfigValue(wc.Config["command"], &commands); err == nil {
+			for _, c := range commands {
+				checkWidgetCommand(where, c, report)
+			}
+		}
+	case "imageCommand":
+		var command string
+		if err := ConfigValue(wc.Config["command"], &command); err == nil {
+			checkWidgetCommand(where, command, report)
+		}
+	}
+}
+
+// checkWidgetCommand reports a widget command whose program, given as a
+// path, is missing or others can change it.
+func checkWidgetCommand(where, command string, report func(string, ...interface{})) {
+	if err := checkCommandTrusted(shellProgram(command)); err != nil {
+		report("%s: command %q: %s", where, command, err)
+	}
 }

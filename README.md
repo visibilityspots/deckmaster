@@ -263,11 +263,15 @@ one the left swipe leads to:
 
 ```bash
 pkill -USR1 -x deckmaster
+# with one systemd instance per device, signal just one of them:
+systemctl --user kill --kill-whom=main -s USR1 deckmaster@mini
 ```
 
 Check a deck and every deck it leads to, without driving the device: syntax
-and type errors, unknown keys, unknown widgets, missing files and files others
-can change (see [Permissions](#permissions)). It checks against the connected
+and type errors, unknown keys, unknown widgets, keys and dials the device
+doesn't have, icons that don't load, missing files, and deck files, `exec`
+programs and widget commands others can change (see
+[Permissions](#permissions)). It checks against the connected
 device, or else against the layout given with `-layout` (`mini`, `original`,
 `xl` or `plus`, the default). Run it before reloading a changed deck:
 
