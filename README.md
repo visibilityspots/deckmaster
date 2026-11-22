@@ -265,6 +265,16 @@ one the left swipe leads to:
 pkill -USR1 -x deckmaster
 ```
 
+Check a deck and every deck it leads to, without driving the device: syntax
+and type errors, unknown keys, unknown widgets, missing files and files others
+can change (see [Permissions](#permissions)). It checks against the connected
+device, or else against the layout given with `-layout` (`mini`, `original`,
+`xl` or `plus`, the default). Run it before reloading a changed deck:
+
+```bash
+deckmaster -check -layout mini -deck ~/.config/deckmaster/main.deck
+```
+
 Choose how key presses get emulated (`auto`, `wayland`, `x11`, `uinput` or
 `none`, see [Emulate key-presses](#emulate-key-presses)):
 

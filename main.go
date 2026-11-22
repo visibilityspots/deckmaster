@@ -40,6 +40,8 @@ var (
 	brightness      = flag.Uint("brightness", 80, "brightness in percent")
 	sleep           = flag.String("sleep", "", "sleep timeout")
 	wait            = flag.Bool("wait", false, "wait for the device to be connected instead of exiting")
+	check           = flag.Bool("check", false, "check the deck and all decks it leads to, without driving the device, then exit")
+	layout          = flag.String("layout", "plus", "device layout for -check when the device isn't connected: mini, original, xl or plus")
 	verbose         = flag.Bool("verbose", false, "verbose output")
 	version         = flag.Bool("version", false, "display version")
 	keyboardBackend = flag.String("keyboard", "auto", "keyboard emulation backend: auto, wayland, x11, uinput or none")
@@ -502,6 +504,18 @@ func main() {
 		}
 
 		fmt.Println()
+		os.Exit(0)
+	}
+
+	if *check {
+		if err := loadFonts(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if n := checkDecks(checkDevice(os.Stdout), *deckFile, os.Stdout); n > 0 {
+			fmt.Printf("%d problem(s) found\n", n)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 

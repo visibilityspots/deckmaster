@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -178,6 +179,9 @@ func LoadConfigFromFile(base, path string, files []string) (DeckConfig, error) {
 	}
 
 	if err := checkTrusted(filename); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return config, err
+		}
 		return config, fmt.Errorf("refusing to load deck: %w", err)
 	}
 	file, err := os.ReadFile(filename)
