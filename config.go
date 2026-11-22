@@ -177,6 +177,9 @@ func LoadConfigFromFile(base, path string, files []string) (DeckConfig, error) {
 		}
 	}
 
+	if err := checkTrusted(filename); err != nil {
+		return config, fmt.Errorf("refusing to load deck: %w", err)
+	}
 	file, err := os.ReadFile(filename)
 	if err != nil {
 		return config, err

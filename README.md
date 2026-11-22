@@ -277,6 +277,16 @@ deckmaster -keyboard wayland
 You can find a few example configurations in the [decks](https://github.com/nix-er/deckmaster/tree/master/decks)
 directory. Edit them to your needs!
 
+### Permissions
+
+Deck files are code: their actions and widgets run commands as you. Like
+OpenSSH's `StrictModes`, deckmaster refuses to load a deck file, and to run a
+program given as a path (e.g. `exec = "~/bin/vpn.sh"` or
+`command = "~/bin/status.sh | head -1"`), when it or its directory is writable
+by others, or owned by someone other than you or root. Programs found through
+`$PATH` and command arguments (the script in `setsid -f ~/script.sh`) are not
+checked.
+
 ### Widgets
 
 Any widget is build up the following way:

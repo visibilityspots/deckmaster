@@ -383,6 +383,10 @@ func executeCommand(cmd string) {
 	if exp, err := expandPath("", args[0]); err == nil {
 		args[0] = exp
 	}
+	if err := checkCommandTrusted(args[0]); err != nil {
+		fmt.Fprintf(os.Stderr, "Refusing to run command: %s\n", err)
+		return
+	}
 
 	c := exec.Command(args[0], args[1:]...) //nolint:gosec
 	if *verbose {

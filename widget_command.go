@@ -176,6 +176,10 @@ var commandTimeout = 10 * time.Second
 // which gets killed as a whole when the command times out, so children it
 // started (e.g. a pipeline) don't linger.
 func runCommand(command string) (string, error) {
+	if err := checkCommandTrusted(shellProgram(command)); err != nil {
+		return "", fmt.Errorf("refusing to run: %w", err)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
