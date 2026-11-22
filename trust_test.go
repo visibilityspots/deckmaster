@@ -106,3 +106,21 @@ func TestShellProgram(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckTrustedSymlinkIntoUnsafeDir(t *testing.T) {
+	safe, unsafe := t.TempDir(), t.TempDir()
+	if err := os.Chmod(unsafe, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(unsafe, "script.sh")
+	if err := os.WriteFile(target, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(safe, "script.sh")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkTrusted(link); err == nil || !strings.Contains(err.Error(), "writable by others") {
+		t.Errorf("symlink into a world-writable directory: error = %v", err)
+	}
+}

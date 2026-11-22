@@ -20,7 +20,19 @@ func checkTrusted(path string) error {
 	if err := checkOwnedAndNotWritable(path, false); err != nil {
 		return err
 	}
-	return checkOwnedAndNotWritable(filepath.Dir(path), true)
+	if err := checkOwnedAndNotWritable(filepath.Dir(path), true); err != nil {
+		return err
+	}
+
+	// a symlink in a safe directory may point into an unsafe one
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return err
+	}
+	if filepath.Dir(real) != filepath.Dir(path) {
+		return checkOwnedAndNotWritable(filepath.Dir(real), true)
+	}
+	return nil
 }
 
 func checkOwnedAndNotWritable(path string, dir bool) error {
