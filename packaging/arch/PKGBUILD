@@ -4,7 +4,7 @@
 # clone instead of GitHub:
 #   DECKMASTER_REPO=file:///path/to/deckmaster makepkg -si
 
-pkgname=deckmaster-visibilityspots
+pkgname=deckmaster-visibilityspots-git
 _pkgname=deckmaster
 pkgver=0.14.1
 pkgrel=1
