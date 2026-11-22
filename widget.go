@@ -275,6 +275,9 @@ func newWidget(bw *BaseWidget, wc WidgetConfig) (Widget, error) {
 	case "command":
 		w, err = NewCommandWidget(bw, wc)
 
+	case "imageCommand":
+		w, err = NewImageCommandWidget(bw, wc)
+
 	case "weather":
 		w, err = NewWeatherWidget(bw, wc)
 

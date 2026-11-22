@@ -26,6 +26,7 @@ An application to control your Elgato Stream Deck on Linux
     - CPU/Mem usage
     - Weather
     - Command output
+    - Images chosen by a command
     - Recently used windows (X11-only)
 - Lets you trigger several actions:
     - Run commands
@@ -420,6 +421,27 @@ A widget that displays the output of commands.
     font = "regular;bold" # optional
     color = "#fefefe" # optional
     layout = "0x0+72x20;0x20+72x52" # optional
+```
+
+Commands run in the background, so a slow command doesn't block the deck. A
+command that runs longer than 10 seconds gets killed, together with any
+processes it started.
+
+#### Image Command
+
+A button whose image is chosen by a command. The first line the command prints
+is the path (`~` and paths relative to the deck work) or the icon name of the
+image to show. The image is only reloaded when that line or the file changes.
+All button options work; `icon` is shown until the command first succeeds, and
+a failing command or a missing image keeps the last image.
+
+```toml
+[keys.widget]
+  id = "imageCommand"
+  interval = 1000 # optional, defaults to 1 second
+  [keys.widget.config]
+    command = "~/.config/deckmaster/spotify-icon.sh"
+    icon = "play-circle" # optional
 ```
 
 #### Weather
