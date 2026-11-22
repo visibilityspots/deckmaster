@@ -1,0 +1,64 @@
+# Maintainer: Jan Collijs <github@visibilityspots.org>
+#
+# Builds deckmaster from the visibilityspots fork. To build from a local
+# clone instead of GitHub:
+#   DECKMASTER_REPO=file:///path/to/deckmaster makepkg -si
+
+pkgname=deckmaster-visibilityspots
+_pkgname=deckmaster
+pkgver=0.14.1
+pkgrel=1
+pkgdesc='Control Elgato Stream Decks (incl. Stream Deck+ dials and touch screen) on Linux'
+arch=('x86_64' 'aarch64')
+url='https://github.com/visibilityspots/deckmaster'
+license=('MIT')
+depends=('glibc')
+makedepends=('git' 'go')
+optdepends=(
+  'xclip: paste action on X11'
+  'wl-clipboard: paste action on Wayland'
+)
+provides=("${_pkgname}")
+conflicts=("${_pkgname}")
+source=("${_pkgname}::git+${DECKMASTER_REPO:-${url}.git}#branch=main")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "${_pkgname}"
+  git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+prepare() {
+  cd "${_pkgname}"
+  export GOPATH="${srcdir}/gopath"
+  go mod download -x
+}
+
+build() {
+  cd "${_pkgname}"
+  export GOPATH="${srcdir}/gopath"
+  export CGO_CPPFLAGS="${CPPFLAGS}"
+  export CGO_CFLAGS="${CFLAGS}"
+  export CGO_CXXFLAGS="${CXXFLAGS}"
+  export CGO_LDFLAGS="${LDFLAGS}"
+  export GOFLAGS='-buildmode=pie -trimpath -mod=readonly -modcacherw'
+  go build -o "${_pkgname}" \
+    -ldflags "-linkmode=external -X main.Version=${pkgver} -X main.CommitSHA=$(git rev-parse HEAD)" .
+}
+
+check() {
+  cd "${_pkgname}"
+  export GOPATH="${srcdir}/gopath"
+  export GOFLAGS='-mod=readonly -modcacherw'
+  go test ./...
+}
+
+package() {
+  cd "${_pkgname}"
+  install -Dm755 "${_pkgname}" "${pkgdir}/usr/bin/${_pkgname}"
+  install -Dm644 udev/70-streamdeck.rules "${pkgdir}/usr/lib/udev/rules.d/70-streamdeck.rules"
+  install -Dm644 packaging/systemd/deckmaster@.service "${pkgdir}/usr/lib/systemd/user/deckmaster@.service"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+  cp -r decks "${pkgdir}/usr/share/doc/${pkgname}/decks"
+}
