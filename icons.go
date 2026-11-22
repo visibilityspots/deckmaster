@@ -61,7 +61,8 @@ func findIcon(name string) (string, error) {
 	if i := strings.LastIndex(name, "/"); i >= 0 {
 		pack, icon = name[:i], name[i+1:]
 	}
-	if icon == "" {
+	// a pack like "x/../../.." would leave the icon directories
+	if icon == "" || !filepath.IsLocal(name) {
 		return "", fmt.Errorf("invalid icon name %q", name)
 	}
 

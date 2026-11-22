@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -15,6 +16,9 @@ import (
 // svgSize is the edge length SVG icons are rasterized at, before they get
 // scaled down to the canvas like any other icon.
 const svgSize = 256
+
+// useElement matches SVG <use> elements, also with a namespace prefix.
+var useElement = regexp.MustCompile(`<([A-Za-z_][\w.-]*:)?use[\s/>]`)
 
 // pathData matches the d attribute of SVG path elements.
 var pathData = regexp.MustCompile(`(\sd=)("[^"]*"|'[^']*')`)
@@ -31,6 +35,12 @@ func rasterizeSVG(r io.Reader) (img image.Image, err error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
+	}
+	// oksvg expands <use> recursively without a depth limit: a self-reference
+	// overflows the stack, which recover() can't catch, and nested references
+	// blow up memory. Refuse them instead of crashing deckmaster.
+	if useElement.Match(data) {
+		return nil, errors.New("svg <use> elements are not supported")
 	}
 	data = pathData.ReplaceAllFunc(data, func(m []byte) []byte {
 		sub := pathData.FindSubmatch(m)

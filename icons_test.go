@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -223,5 +224,33 @@ func TestLoadImageSVGCompactArcs(t *testing.T) {
 	}
 	if got := color.RGBAModel.Convert(img.At(svgSize/2, svgSize/2)); got != (color.RGBA{0, 255, 0, 255}) {
 		t.Errorf("center pixel = %v, want green", got)
+	}
+}
+
+func TestRasterizeSVGRefusesUse(t *testing.T) {
+	for _, svg := range []string{
+		// a self-reference overflowed the stack and killed deckmaster
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><defs><g id="a"><use href="#a"/></g></defs><use href="#a"/></svg>`,
+		`<svg:svg xmlns:svg="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><svg:use href="#a"></svg:use></svg:svg>`,
+		"<svg viewBox=\"0 0 10 10\"><use\nhref=\"#a\"/></svg>",
+	} {
+		if _, err := rasterizeSVG(strings.NewReader(svg)); err == nil || !strings.Contains(err.Error(), "<use>") {
+			t.Errorf("rasterizeSVG(%q) error = %v, want <use> refused", svg, err)
+		}
+	}
+
+	// elements merely starting with "use" are fine
+	ok := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><userdata/><rect width="10" height="10" fill="#fff"/></svg>`
+	if _, err := rasterizeSVG(strings.NewReader(ok)); err != nil {
+		t.Errorf("rasterizeSVG(<userdata>) error = %v", err)
+	}
+}
+
+func TestFindIconRefusesEscapes(t *testing.T) {
+	t.Setenv("DECKMASTER_ICON_PATH", t.TempDir())
+	for _, name := range []string{"x/../../../../tmp/evil", "../evil", "pack/../../evil"} {
+		if _, err := findIcon(name); err == nil || !strings.Contains(err.Error(), "invalid icon name") {
+			t.Errorf("findIcon(%q) error = %v, want invalid icon name", name, err)
+		}
 	}
 }
