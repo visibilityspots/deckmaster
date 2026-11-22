@@ -536,3 +536,21 @@ func TestCommandWidgetRequiresUpdate(t *testing.T) {
 		t.Error("update without new output")
 	}
 }
+
+func TestTopWidgetWaitsForIntervalWhenUnchanged(t *testing.T) {
+	w, _ := renderWidget(t, xlDevice(), displayKey, WidgetConfig{ID: "top", Interval: 60000, Config: map[string]interface{}{
+		"mode": "memory",
+	}})
+	tw := w.(*TopWidget)
+
+	if err := tw.draw(42, "MEM"); err != nil {
+		t.Fatal(err)
+	}
+	tw.lastUpdate = time.Time{}
+	if err := tw.draw(42, "MEM"); err != nil {
+		t.Fatal(err)
+	}
+	if w.RequiresUpdate() {
+		t.Error("widget wants an update right after an unchanged reading, want it to wait for its interval")
+	}
+}

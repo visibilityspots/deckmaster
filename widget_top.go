@@ -75,7 +75,15 @@ func (w *TopWidget) Update() error {
 		return fmt.Errorf("unknown widget mode: %s", w.mode)
 	}
 
+	return w.draw(value, label)
+}
+
+// draw renders the given usage, unless it's unchanged.
+func (w *TopWidget) draw(value float64, label string) error {
 	if w.lastValue == value {
+		// nothing to repaint, but wait for the next interval before polling
+		// again, instead of on every pass of the event loop
+		w.lastUpdate = time.Now()
 		return nil
 	}
 	w.lastValue = value
