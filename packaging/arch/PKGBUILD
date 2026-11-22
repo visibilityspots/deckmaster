@@ -32,6 +32,7 @@ prepare() {
   cd "${_pkgname}"
   export GOPATH="${srcdir}/gopath"
   export GOTOOLCHAIN=local
+  export GOFLAGS='-modcacherw'
   go mod download
   # every module must match go.sum, which pins what was reviewed
   go mod verify
