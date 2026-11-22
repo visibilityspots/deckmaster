@@ -286,3 +286,24 @@ func TestMsDuration(t *testing.T) {
 		t.Errorf("msDuration(max) = %v, want it to saturate", got)
 	}
 }
+
+func TestRunCommandTimeout(t *testing.T) {
+	old := commandTimeout
+	commandTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { commandTimeout = old })
+
+	// the background sleep keeps stdout open; it must die with its group
+	start := time.Now()
+	_, err := runCommand("sleep 30 & sleep 30; echo late")
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("runCommand() error = %v, want a timeout", err)
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Errorf("runCommand() took %s, the process group wasn't killed", took)
+	}
+
+	out, err := runCommand("echo ok")
+	if err != nil || out != "ok" {
+		t.Errorf("runCommand(echo ok) = %q, %v", out, err)
+	}
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"image/color"
@@ -9,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -165,8 +167,31 @@ func (r *commandRunner) run() {
 	r.fresh = true
 }
 
+// commandTimeout limits how long a widget command may run. Widgets poll, so
+// a command that hangs would otherwise freeze its widget for good.
+var commandTimeout = 10 * time.Second
+
+// runCommand runs a widget command through the shell and returns its output
+// without the trailing newline. The command runs in its own process group,
+// which gets killed as a whole when the command times out, so children it
+// started (e.g. a pipeline) don't linger.
 func runCommand(command string) (string, error) {
-	output, err := exec.Command("sh", "-c", command).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	c := exec.CommandContext(ctx, "sh", "-c", command)
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	c.Cancel = func() error {
+		// a negative pid signals the whole process group
+		return syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+	}
+	// don't wait for grandchildren that keep stdout open after the kill
+	c.WaitDelay = time.Second
+
+	output, err := c.Output()
+	if ctx.Err() == context.DeadlineExceeded {
+		return "", fmt.Errorf("timed out after %s", commandTimeout)
+	}
 	if err != nil {
 		return "", err
 	}
