@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	colorful "github.com/lucasb-eyer/go-colorful"
@@ -372,7 +373,9 @@ const (
 )
 
 func loadImage(path string) (image.Image, error) {
-	f, err := os.Open(path)
+	// O_NONBLOCK: opening a FIFO would otherwise block until a writer shows
+	// up, freezing the event loop; it's refused right below
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}

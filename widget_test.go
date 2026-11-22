@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -359,5 +360,25 @@ func TestRunCommandOutputLimit(t *testing.T) {
 	}
 	if took := time.Since(start); took > 5*time.Second {
 		t.Errorf("runCommand(yes) took %s, the command wasn't stopped", took)
+	}
+}
+
+func TestLoadImageFIFO(t *testing.T) {
+	fifo := filepath.Join(t.TempDir(), "icon.png")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Skip("can't create a FIFO:", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := loadImage(fifo)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "not a regular file") {
+			t.Errorf("loadImage(fifo) error = %v, want not a regular file", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("loadImage(fifo) blocked")
 	}
 }
