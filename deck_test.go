@@ -242,6 +242,7 @@ func TestLoadDeckBackground(t *testing.T) {
 func TestLoadDeckBadBackground(t *testing.T) {
 	dir := t.TempDir()
 	writePNG(t, filepath.Join(dir, "small.png"), testBackground(96, 96))
+	writePNG(t, filepath.Join(dir, "huge.png"), testBackground(maxImageEdge+1, 1))
 	if err := os.WriteFile(filepath.Join(dir, "text.png"), []byte("no image"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -250,6 +251,7 @@ func TestLoadDeckBadBackground(t *testing.T) {
 		"small.png":   "wrong dimensions, expected 992x480",
 		"text.png":    "unknown format",
 		"missing.png": "no such file",
+		"huge.png":    "too large",
 	} {
 		path := filepath.Join(dir, "test.deck")
 		if err := os.WriteFile(path, []byte(`background = "`+bg+`"`), 0o600); err != nil {

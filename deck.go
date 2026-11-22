@@ -116,13 +116,8 @@ func LoadDeck(dev *streamdeck.Device, base string, deck string) (*Deck, error) {
 
 // loads a background image.
 func (d *Deck) loadBackground(dev *streamdeck.Device, bg string) error {
-	f, err := os.Open(bg)
-	if err != nil {
-		return err
-	}
-	defer f.Close() //nolint:errcheck
-
-	background, _, err := image.Decode(f)
+	// with the same size limits as icons
+	background, err := loadImage(bg)
 	if err != nil {
 		return err
 	}
