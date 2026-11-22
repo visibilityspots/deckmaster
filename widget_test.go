@@ -351,3 +351,13 @@ func TestLoadImageLimits(t *testing.T) {
 		t.Errorf("loadImage(ok) = %v, %v", img, err)
 	}
 }
+
+func TestRunCommandOutputLimit(t *testing.T) {
+	start := time.Now()
+	if _, err := runCommand("yes"); err == nil || !strings.Contains(err.Error(), "more than") {
+		t.Errorf("runCommand(yes) error = %v, want output limit", err)
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Errorf("runCommand(yes) took %s, the command wasn't stopped", took)
+	}
+}

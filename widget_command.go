@@ -192,12 +192,37 @@ func runCommand(command string) (string, error) {
 	// don't wait for grandchildren that keep stdout open after the kill
 	c.WaitDelay = time.Second
 
-	output, err := c.Output()
+	var out cappedBuffer
+	c.Stdout = &out
+	err := c.Run()
 	if ctx.Err() == context.DeadlineExceeded {
 		return "", fmt.Errorf("timed out after %s", commandTimeout)
+	}
+	if out.exceeded {
+		return "", fmt.Errorf("printed more than %d bytes", maxCommandOutput)
 	}
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSuffix(string(output), "\n"), nil
+	return strings.TrimSuffix(out.String(), "\n"), nil
+}
+
+// maxCommandOutput limits what a widget command may print. Widgets show a
+// few words or a path; a command flooding its output would otherwise grow
+// deckmaster's memory without bound.
+const maxCommandOutput = 64 << 10
+
+// cappedBuffer collects output up to maxCommandOutput bytes. Writing more
+// fails, which ends the command with a broken pipe.
+type cappedBuffer struct {
+	strings.Builder
+	exceeded bool
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	if b.Len()+len(p) > maxCommandOutput {
+		b.exceeded = true
+		return 0, fmt.Errorf("output exceeds %d bytes", maxCommandOutput)
+	}
+	return b.Builder.Write(p)
 }
