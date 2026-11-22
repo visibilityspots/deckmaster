@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	_ "image/png" // decode PNG icons
+	"io"
 	"maps"
 	"math"
 	"os"
@@ -359,6 +360,14 @@ func msDuration(ms uint) time.Duration {
 	return time.Duration(ms) * time.Millisecond //nolint:gosec // bounded above
 }
 
+// Limits for images loaded from disk. Icons are scaled down to at most a
+// few hundred pixels anyway; the limits keep a huge or malformed file (e.g. a
+// small PNG declaring 50000x50000 pixels) from exhausting memory.
+const (
+	maxImageFileSize = 8 << 20 // bytes
+	maxImageEdge     = 4096    // pixels
+)
+
 func loadImage(path string) (image.Image, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -366,8 +375,31 @@ func loadImage(path string) (image.Image, error) {
 	}
 	defer f.Close() //nolint:errcheck
 
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	if fi.Size() > maxImageFileSize {
+		return nil, fmt.Errorf("%s is too big (%d bytes, at most %d)", path, fi.Size(), maxImageFileSize)
+	}
+
 	if strings.EqualFold(filepath.Ext(path), ".svg") {
 		return rasterizeSVG(f)
+	}
+
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Width > maxImageEdge || cfg.Height > maxImageEdge {
+		return nil, fmt.Errorf("%s is too large (%dx%d pixels, at most %d on each side)",
+			path, cfg.Width, cfg.Height, maxImageEdge)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, err
 	}
 
 	icon, _, err := image.Decode(f)

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"image"
 	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -305,5 +308,46 @@ func TestRunCommandTimeout(t *testing.T) {
 	out, err := runCommand("echo ok")
 	if err != nil || out != "ok" {
 		t.Errorf("runCommand(echo ok) = %q, %v", out, err)
+	}
+}
+
+func TestLoadImageLimits(t *testing.T) {
+	dir := t.TempDir()
+
+	// a tiny PNG header declaring a huge image must be refused before decoding
+	huge := filepath.Join(dir, "huge.png")
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewGray(image.Rect(0, 0, maxImageEdge+1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(huge, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadImage(huge); err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Errorf("loadImage(huge) error = %v, want too large", err)
+	}
+
+	big := filepath.Join(dir, "big.png")
+	if err := os.WriteFile(big, make([]byte, maxImageFileSize+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadImage(big); err == nil || !strings.Contains(err.Error(), "too big") {
+		t.Errorf("loadImage(big) error = %v, want too big", err)
+	}
+
+	if _, err := loadImage(dir); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Errorf("loadImage(dir) error = %v, want not a regular file", err)
+	}
+
+	ok := filepath.Join(dir, "ok.png")
+	buf.Reset()
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 72, 72))); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ok, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if img, err := loadImage(ok); err != nil || img.Bounds().Dx() != 72 {
+		t.Errorf("loadImage(ok) = %v, %v", img, err)
 	}
 }
