@@ -64,13 +64,14 @@ func Connect(display string) (*Xorg, error) {
 		return nil, err
 	}
 
+	setup := xproto.Setup(x.conn)
+	x.root = setup.DefaultScreen(x.conn).Root
+
+	// after x.root is known: selecting input on window 0 does nothing
 	if err := screensaver.Init(x.conn); err == nil {
 		drw := xproto.Drawable(x.root)
 		screensaver.SelectInput(x.conn, drw, screensaver.EventNotifyMask)
 	}
-
-	setup := xproto.Setup(x.conn)
-	x.root = setup.DefaultScreen(x.conn).Root
 
 	x.activeAtom = x.atom("_NET_ACTIVE_WINDOW")
 	x.netNameAtom = x.atom("_NET_WM_NAME")
