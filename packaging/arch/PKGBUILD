@@ -6,7 +6,7 @@
 
 pkgname=deckmaster-visibilityspots-git
 _pkgname=deckmaster
-pkgver=0.14.1
+pkgver=0.14.2
 pkgrel=1
 pkgdesc='Control Elgato Stream Decks (incl. Stream Deck+ dials and touch screen) on Linux'
 arch=('x86_64' 'aarch64')
