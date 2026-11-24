@@ -127,10 +127,18 @@ func eventLoop(dev *streamdeck.Device, tch chan interface{}) error {
 	// here, so only this goroutine writes to the device
 	holds := make(chan func(), 8)
 
+	// the trackers still see every press and release while locked, so they
+	// keep the right state; only the actions are skipped
 	keys := newPressTracker("key", holds, func(index uint8, hold bool) {
+		if lock.ignored(fmt.Sprintf("key %d", index)) {
+			return
+		}
 		deck.triggerAction(dev, index, hold)
 	})
 	dials := newPressTracker("dial", holds, func(index uint8, hold bool) {
+		if lock.ignored(fmt.Sprintf("dial %d", index)) {
+			return
+		}
 		deck.triggerDialAction(dev, index, hold)
 	})
 
@@ -141,6 +149,7 @@ func eventLoop(dev *streamdeck.Device, tch chan interface{}) error {
 	for {
 		select {
 		case <-time.After(100 * time.Millisecond):
+			lock.update(dev)
 			deck.updateWidgets()
 
 		case e, ok := <-ich:
@@ -164,10 +173,14 @@ func eventLoop(dev *streamdeck.Device, tch chan interface{}) error {
 
 			case streamdeck.DialTurn:
 				verbosef("Dial %d turned %d step(s)", e.Index, e.Steps)
-				deck.turnDial(dev, e.Index, e.Steps)
+				if !lock.ignored(fmt.Sprintf("dial %d turn", e.Index)) {
+					deck.turnDial(dev, e.Index, e.Steps)
+				}
 
 			case streamdeck.Touch:
-				handleTouch(dev, e)
+				if !lock.ignored("touch screen") {
+					handleTouch(dev, e)
+				}
 			}
 
 		case hold := <-holds:
@@ -236,9 +249,11 @@ func reconnect(dev *streamdeck.Device, sigs <-chan os.Signal) (chan streamdeck.E
 	if err := dev.Reset(); err != nil {
 		return nil, err
 	}
-	if err := dev.SetBrightness(uint8(*brightness)); err != nil { //nolint:gosec // at most 100
+	// already dimmed if the deck is locked, without a flash of full brightness
+	if err := dev.SetBrightness(lock.brightness(lock.locked())); err != nil {
 		return nil, err
 	}
+	lock.reset()
 
 	nd, err := LoadDeck(dev, ".", deck.File)
 	if err != nil {
@@ -261,8 +276,11 @@ type pressTracker struct {
 	pressed    map[uint8]bool
 	presses    map[uint8]uint64
 	timestamps map[uint8]time.Time
-	holds      chan<- func()
-	trigger    func(index uint8, hold bool)
+	// lockedAt records whether the current press began while the deck was
+	// locked: such a press never triggers, even when it ends after unlocking
+	lockedAt map[uint8]bool
+	holds    chan<- func()
+	trigger  func(index uint8, hold bool)
 }
 
 // newPressTracker returns a pressTracker calling trigger for short presses
@@ -273,6 +291,7 @@ func newPressTracker(name string, holds chan<- func(), trigger func(index uint8,
 		pressed:    make(map[uint8]bool),
 		presses:    make(map[uint8]uint64),
 		timestamps: make(map[uint8]time.Time),
+		lockedAt:   make(map[uint8]bool),
 		holds:      holds,
 		trigger:    trigger,
 	}
@@ -285,7 +304,10 @@ func (p *pressTracker) handle(index uint8, pressed bool) {
 
 	if was && !pressed {
 		// was released
-		if time.Since(p.timestamps[index]) < longPressDuration {
+		switch {
+		case p.lockedAt[index]:
+			verbosef("Ignoring %s %d, pressed while locked", p.name, index)
+		case time.Since(p.timestamps[index]) < longPressDuration:
 			verbosef("Triggering short action for %s %d", p.name, index)
 			p.trigger(index, false)
 		}
@@ -295,6 +317,7 @@ func (p *pressTracker) handle(index uint8, pressed bool) {
 		// have been missed (e.g. it woke the device from sleep)
 		p.presses[index]++
 		press := p.presses[index]
+		p.lockedAt[index] = lock.locked()
 
 		go func() {
 			time.Sleep(longPressDuration)
@@ -302,7 +325,7 @@ func (p *pressTracker) handle(index uint8, pressed bool) {
 			// checked on the event loop: it's only a long press if this press
 			// is still going on, not just any later one
 			p.holds <- func() {
-				if p.pressed[index] && p.presses[index] == press {
+				if p.pressed[index] && p.presses[index] == press && !p.lockedAt[index] {
 					verbosef("Triggering long action for %s %d", p.name, index)
 					p.trigger(index, true)
 				}
@@ -452,7 +475,8 @@ func initDevice() (*streamdeck.Device, error) {
 	if *brightness > 100 {
 		*brightness = 100
 	}
-	if err = dev.SetBrightness(uint8(*brightness)); err != nil { //nolint:gosec // clamped to 100 above
+	// already dimmed if the deck is locked, without a flash of full brightness
+	if err = dev.SetBrightness(lock.brightness(lock.locked())); err != nil {
 		return dev, err
 	}
 
@@ -521,6 +545,13 @@ func run() error {
 
 func main() {
 	flag.Parse()
+	if err := lock.setLockFile(*lockFile); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if lock.path != "" && !*version && !*check {
+		fmt.Fprintln(os.Stderr, "Lock file:", lock.path)
+	}
 
 	if *version {
 		if len(CommitSHA) > 7 {

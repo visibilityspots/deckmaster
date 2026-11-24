@@ -257,6 +257,23 @@ Set a sleep timeout after which the screen gets turned off:
 deckmaster -sleep 10m
 ```
 
+Lock the deck together with your screen: while the given file exists, all
+device input is ignored (keys, dials, touch screen) and the device is dimmed to
+`-lockbrightness` percent (default 10, at least 1). The path must be absolute. Let your screen locker create the file
+and remove it on unlock, e.g. with xss-lock:
+
+```bash
+deckmaster -lockfile /tmp/locked
+# /usr/local/bin/lock, started by xss-lock: touch /tmp/locked, then i3lock;
+# once i3lock exits: rm -f /tmp/locked
+```
+
+The check runs right before every action, so nothing slips through while the
+screen locks, and a press that began while locked doesn't trigger when it ends
+after unlocking. A lock file that can't be checked, e.g. for lack of
+permission, counts as locked. Signals such as `SIGUSR1` still work: they come
+from your own session, not from the device.
+
 Switch to the next deck from outside, e.g. from a keybinding or script. The
 next deck is the one the first key with a `deck` action leads to, or else the
 one the left swipe leads to:

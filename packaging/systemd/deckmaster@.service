@@ -11,6 +11,13 @@
 # It's required: without it every instance would take the first device.
 # LAYOUT (mini, original, xl or plus) is used by -check before a reload
 # while the device is unplugged.
+# OPTIONS is optional: more command line arguments, split on spaces (so a
+# value can't contain one), e.g.
+#
+#   OPTIONS=-lockfile /tmp/locked -brightness 60
+#
+# Don't add PrivateTmp= with a -lockfile under /tmp: deckmaster would no longer
+# see the file, and the deck would never lock.
 #
 # Enable one instance per device, once its SERIAL is filled in:
 #   systemctl --user enable --now deckmaster@mini
@@ -20,10 +27,13 @@ Description=Deckmaster for Stream Deck %i
 Documentation=https://github.com/visibilityspots/deckmaster
 
 [Service]
+# empty unless the .env file sets it, so systemd doesn't warn it's unset
+Environment=OPTIONS=
 EnvironmentFile=%E/deckmaster/%i.env
 ExecStartPre=/bin/sh -c 'test -n "$$SERIAL" || { echo "SERIAL is empty in %E/deckmaster/%i.env, see deckmaster -device x" >&2; exit 1; }'
 # -wait: start before the device is plugged in, survive unplugging it
-ExecStart=/usr/bin/deckmaster -wait -device ${SERIAL} -deck ${DECK}
+# $OPTIONS, not ${OPTIONS}: split into separate arguments, nothing when unset
+ExecStart=/usr/bin/deckmaster -wait -device ${SERIAL} -deck ${DECK} $OPTIONS
 # refuse a reload of broken decks, so systemctl reports it
 ExecReload=/usr/bin/deckmaster -check -layout ${LAYOUT} -device ${SERIAL} -deck ${DECK}
 ExecReload=/bin/kill -HUP $MAINPID
