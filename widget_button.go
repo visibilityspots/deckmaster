@@ -100,7 +100,7 @@ func (w *ButtonWidget) Update() error {
 	case w.label != "":
 		err = w.drawLabel(img, margin, height)
 	case w.icon != nil:
-		err = drawImage(img, w.icon, height, image.Pt(-1, -1))
+		drawImageFit(img, w.icon, img.Bounds().Inset(margin))
 	}
 	if err != nil {
 		return err

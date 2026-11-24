@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/color"
@@ -435,6 +436,59 @@ func TestDrawImageCenters(t *testing.T) {
 		_, _, _, a := img.At(tt.pt.X, tt.pt.Y).RGBA()
 		if (a > 0) != tt.lit {
 			t.Errorf("pixel %v lit = %v, want %v", tt.pt, a > 0, tt.lit)
+		}
+	}
+}
+
+// A wide icon keeps its aspect ratio: it fills the width of a wide area and
+// is centered vertically, instead of being squeezed into a square.
+func TestDrawImageFitKeepsAspect(t *testing.T) {
+	icon := image.NewRGBA(image.Rect(0, 0, 40, 20))
+	draw.Draw(icon, icon.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+
+	// wide area, wide icon: 2:1 into 100x30 gives 60x30, x 20-79
+	img := image.NewRGBA(image.Rect(0, 0, 100, 30))
+	drawImageFit(img, icon, img.Bounds())
+	for _, tt := range []struct {
+		pt  image.Point
+		lit bool
+	}{{image.Pt(19, 15), false}, {image.Pt(20, 15), true}, {image.Pt(79, 15), true}, {image.Pt(80, 15), false}} {
+		_, _, _, a := img.At(tt.pt.X, tt.pt.Y).RGBA()
+		if (a > 0) != tt.lit {
+			t.Errorf("wide area: pixel %v lit = %v, want %v", tt.pt, a > 0, tt.lit)
+		}
+	}
+
+	// square area, wide icon: 2:1 into 40x40 gives 40x20, y 10-29
+	img = image.NewRGBA(image.Rect(0, 0, 40, 40))
+	drawImageFit(img, icon, img.Bounds())
+	for _, tt := range []struct {
+		pt  image.Point
+		lit bool
+	}{{image.Pt(20, 9), false}, {image.Pt(20, 10), true}, {image.Pt(20, 29), true}, {image.Pt(20, 30), false}} {
+		_, _, _, a := img.At(tt.pt.X, tt.pt.Y).RGBA()
+		if (a > 0) != tt.lit {
+			t.Errorf("square area: pixel %v lit = %v, want %v", tt.pt, a > 0, tt.lit)
+		}
+	}
+}
+
+// A square icon fits the same square drawImage gives it.
+func TestDrawImageFitSquareMatchesDrawImage(t *testing.T) {
+	icon := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	draw.Draw(icon, icon.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+
+	for _, area := range []image.Rectangle{image.Rect(0, 0, 96, 96), image.Rect(0, 0, 200, 100)} {
+		margin := area.Dy() / 18
+		height := area.Dy() - 2*margin
+		want := image.NewRGBA(area)
+		if err := drawImage(want, icon, height, image.Pt(-1, -1)); err != nil {
+			t.Fatal(err)
+		}
+		got := image.NewRGBA(area)
+		drawImageFit(got, icon, area.Inset(margin))
+		if !bytes.Equal(got.Pix, want.Pix) {
+			t.Errorf("%v: drawImageFit differs from drawImage for a square icon", area)
 		}
 	}
 }

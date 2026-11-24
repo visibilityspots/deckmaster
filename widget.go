@@ -462,6 +462,26 @@ func drawImage(img *image.RGBA, icon image.Image, size int, pt image.Point) erro
 	return nil
 }
 
+// drawImageFit draws the icon as large as fits in bounds, centered and with
+// its aspect ratio kept: a wide image on a touch screen segment uses the
+// segment's width instead of being squeezed into a square. A square icon in a
+// square or wider area comes out the same as drawImage at the area's height.
+func drawImageFit(img *image.RGBA, icon image.Image, bounds image.Rectangle) {
+	iw, ih := icon.Bounds().Dx(), icon.Bounds().Dy()
+	if iw <= 0 || ih <= 0 || bounds.Empty() {
+		return
+	}
+	w, h := bounds.Dx(), bounds.Dy()
+	if w*ih > h*iw {
+		w = h * iw / ih // area is wider than the icon: fit the height
+	} else {
+		h = w * ih / iw // area is taller than the icon: fit the width
+	}
+	x := bounds.Min.X + (bounds.Dx()-w)/2
+	y := bounds.Min.Y + (bounds.Dy()-h)/2
+	draw.CatmullRom.Scale(img, image.Rect(x, y, x+w, y+h), icon, icon.Bounds(), draw.Src, nil)
+}
+
 func drawString(img *image.RGBA, bounds image.Rectangle, ttf *opentype.Font, text string, dpi uint, fontsize float64, color color.Color, pt image.Point) {
 	if fontsize <= 0 {
 		// pick biggest available height to fit the string
